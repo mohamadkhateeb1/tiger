@@ -1,0 +1,98 @@
+import 'diet_model.dart';
+
+class MockDietData {
+  static List<DietModel> allDiets = [
+    // --- وجبات اليوم المقترحة (المختارة من الكوتش) ---
+    DietModel(
+      id: '1',
+      name: 'شوفان بالمكسرات',
+      imageUrl: 'https://images.pexels.com/photos/5946981/pexels-photo-5946981.jpeg',
+      calories: '350',
+      protein: '15g',
+      carbs: '45g',
+      fats: '12g',
+      description: 'وجبة إفطار غنية بالألياف. الشوفان يوفر طاقة مستدامة، بينما تمنحك المكسرات الدهون الصحية الضرورية لوظائف الدماغ والهرمونات.',
+      isSelectedByCoach: true,
+    ),
+    DietModel(
+      id: '2',
+      name: 'صدر دجاج مع أرز',
+      imageUrl: 'https://images.pexels.com/photos/1640772/pexels-photo-1640772.jpeg',
+      calories: '520',
+      protein: '45g',
+      carbs: '50g',
+      fats: '8g',
+      description: 'الوجبة المثالية بعد التمرين. بروتين عالي الجودة من صدور الدجاج لترميم العضلات، وكربوهيدرات من الأرز لتعويض مخازن الجليكوجين.',
+      isSelectedByCoach: true,
+    ),
+    DietModel(
+      id: '3',
+      name: 'سمك سلمون مشوي',
+      imageUrl: 'https://images.pexels.com/photos/262959/pexels-photo-262959.jpeg',
+      calories: '480',
+      protein: '35g',
+      carbs: '5g',
+      fats: '22g',
+      description: 'غني بالأوميغا 3 التي تقلل الالتهابات بعد التمارين الشاقة. يقدم مع خضار سوتيه للحصول على المعادن الأساسية.',
+      isSelectedByCoach: true,
+    ),
+
+    // --- مكتبة الوجبات العامة ---
+    DietModel(
+      id: '4',
+      name: 'سلطة تونة بالذرة',
+      imageUrl: 'https://images.pexels.com/photos/2097090/pexels-photo-2097090.jpeg',
+      calories: '310',
+      protein: '28g',
+      carbs: '15g',
+      fats: '10g',
+      description: 'وجبة خفيفة وسريعة التحضير. التونة مصدر بروتين زهيد السعرات، والذرة توفر أليافاً تعطي شعوراً بالشبع لفترة طويلة.',
+      isSelectedByCoach: false,
+    ),
+    DietModel(
+      id: '5',
+      name: 'بيض مسلوق وأفوكادو',
+      imageUrl: 'https://images.pexels.com/photos/566566/pexels-photo-566566.jpeg',
+      calories: '400',
+      protein: '18g',
+      carbs: '8g',
+      fats: '28g',
+      description: 'دهون صحية وبروتين كامل. الأفوكادو يساعد في امتصاص الفيتامينات والبيض يحتوي على جميع الأحماض الأمينية الأساسية.',
+      isSelectedByCoach: false,
+    ),
+    DietModel(
+      id: '6',
+      name: 'زبادي يوناني بالعسل',
+      imageUrl: 'https://images.pexels.com/photos/3951665/pexels-photo-3951665.jpeg',
+      calories: '250',
+      protein: '20g',
+      carbs: '30g',
+      fats: '4g',
+      description: 'سناك بروتيني ممتاز. الزبادي اليوناني يحتوي على ضعف كمية البروتين الموجودة في الزبادي العادي، والعسل يوفر طاقة فورية.',
+      isSelectedByCoach: false,
+    ),
+    DietModel(
+      id: '7',
+      name: 'ستيك لحم بقري',
+      // تم استبدال assets/diet/steak.jpg بهذا الرابط لحل الخطأ
+      imageUrl: 'https://images.pexels.com/photos/3535383/pexels-photo-3535383.jpeg',
+      calories: '600',
+      protein: '50g',
+      carbs: '0g',
+      fats: '35g',
+      description: 'مصدر غني بالحديد والزنك وفيتامين B12. مثالي لزيادة الكتلة العضلية والقوة البدنية.',
+      isSelectedByCoach: false,
+    ),
+    DietModel(
+      id: '8',
+      name: 'سلطة كينوا بالخضار',
+      imageUrl: 'https://images.pexels.com/photos/2741448/pexels-photo-2741448.jpeg',
+      calories: '380',
+      protein: '12g',
+      carbs: '55g',
+      fats: '9g',
+      description: 'مصدر نباتي كامل للبروتين. الكينوا بديل ممتاز للأرز وتحتوي على نسبة عالية من المغنيسيوم والبوتاسيوم.',
+      isSelectedByCoach: false,
+    ),
+  ];
+}
