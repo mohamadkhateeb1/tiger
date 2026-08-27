@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart'; // ✅ إضافة مكتبة url_launcher
 import '../../../../core/theme.dart';
+import 'api_service.dart';
 import 'main_wrapper.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,6 +16,11 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+
+  // 🔄 حالة تحميل تظهر أثناء انتظار رد الخادم، وتمنع الضغط المتكرر على الزر
+  bool _isLoading = false;
+
+  final ApiService _apiService = ApiService();
 
   // --- دالة فتح الواتساب للتسجيل ---
   Future<void> _openWhatsAppRegistration() async {
@@ -48,27 +54,31 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- دالة معالجة تسجيل الدخول ---
-  void _handleLogin() async {
+  // --- دالة معالجة تسجيل الدخول الحقيقي عبر الـ API ---
+  Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-
-    final Map<String, String> allowedUsers = {
-      "1": "1",
-      "coach@tiger.com": "admin123",
-      "test@test.com": "123456",
-    };
 
     if (email.isEmpty || password.isEmpty) {
       _showErrorSnackBar("يرجى إدخال البريد وكلمة المرور");
       return;
     }
 
-    if (allowedUsers.containsKey(email) && allowedUsers[email] == password) {
+    setState(() => _isLoading = true);
+
+    final result = await _apiService.login(email, password);
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result.success) {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', true);
       await prefs.setBool('is_guest', false);
-      await prefs.setString('user_email', email);
+      await prefs.setString('auth_token', result.token!);
+      await prefs.setInt('player_id', result.player!.id);
+      await prefs.setString('player_name', result.player!.name);
+      await prefs.setString('player_email', result.player!.email);
 
       if (!mounted) return;
 
@@ -77,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (context) => const MainWrapper()),
       );
     } else {
-      _showErrorSnackBar("بيانات الدخول غير صحيحة، راجع الكوتش 🐯");
+      _showErrorSnackBar(result.errorMessage ?? "حدث خطأ غير متوقع، حاول مجدداً");
     }
   }
 
@@ -122,6 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
+                enabled: !_isLoading,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: 'البريد الإلكتروني',
@@ -133,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: !_isPasswordVisible,
+                enabled: !_isLoading,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'كلمة المرور',
@@ -152,8 +164,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: _handleLogin,
-                  child: const Text("دخول الآن", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  onPressed: _isLoading ? null : _handleLogin,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black),
+                        )
+                      : const Text("دخول الآن", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
 
@@ -163,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 55,
                 child: OutlinedButton(
-                  onPressed: _handleGuestLogin,
+                  onPressed: _isLoading ? null : _handleGuestLogin,
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppTheme.primaryColor, width: 1.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -177,7 +195,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Wrap(
                   children: [
                     const Text("ليس لديك حساب؟ ", style: TextStyle(color: Colors.white)),
-                    // ✅ تم ربط الدالة الجديدة بالزر هنا
                     GestureDetector(
                       onTap: _openWhatsAppRegistration,
                       child: const Text("اتصل بالمدرب للتسجيل", style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),

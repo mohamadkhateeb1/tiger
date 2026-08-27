@@ -1,18 +1,39 @@
+/// يمثّل بيانات اللاعب المسجَّل دخوله (هويته الأساسية فقط).
+/// بيانات الاشتراك (تاريخ الانتهاء، الحالة...) ستُجلب لاحقاً من نقطة
+/// نهاية منفصلة (خطوة قادمة)، وليست جزءاً من رد تسجيل الدخول.
 class UserModel {
+  final int id;
   final String name;
-  final String expiryDate;
-  final int totalDays;
-  final bool isActive;
+  final String email;
+  final String? phone;
+  final String? level;
 
-  UserModel({required this.name, required this.expiryDate, required this.totalDays, required this.isActive});
+  UserModel({
+    required this.id,
+    required this.name,
+    required this.email,
+    this.phone,
+    this.level,
+  });
 
-  // هذه الدالة ستحول رد السيرفر (JSON) إلى كائن يفهمه Flutter لاحقاً
+  /// تحويل رد الـ API (JSON) إلى كائن Dart.
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
+      id: json['id'],
       name: json['name'],
-      expiryDate: json['expiry_date'],
-      totalDays: json['total_days'],
-      isActive: json['is_active'],
+      email: json['email'],
+      phone: json['phone'],
+      level: json['level'],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'level': level,
+    };
   }
 }

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme.dart';
+import '../../../data/models/subscription_model.dart';
+import 'api_service.dart';
+import 'login_screen.dart';
 import 'workout_screen.dart'; // ✅ استيراد صفحة التمارين للربط
+import 'profile_screen.dart'; // ✅ استيراد صفحة الملف الشخصي
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({Key? key}) : super(key: key);
@@ -11,33 +16,145 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
-  // --- بيانات الاشتراك ---
-  final String expiryDateString = "2026-06-15";
-  final int totalSubscriptionDays = 30;
+  final ApiService _apiService = ApiService();
 
-  // --- حالة التمارين المنجزة لهذا الأسبوع ---
-  int _completedWorkouts = 2; // القيمة الحالية
-  final int _totalWeeklyWorkouts = 5; // الهدف الأسبوعي
+  // 🔄 حالة الجلب: تحميل / خطأ / نجاح — بدل التاريخ الثابت السابق
+  bool _isLoading = true;
+  String? _errorMessage;
+  SubscriptionModel? _subscription;
 
-  // دالة لحساب الأيام المتبقية
+  // --- حالة التمارين المنجزة لهذا الأسبوع (محلية، مستقلة عن الاشتراك تماماً) ---
+  int _completedWorkouts = 2;
+  final int _totalWeeklyWorkouts = 5;
+
+  // --- حالة تسجيل الحضور اليومي ---
+  bool _isCheckedInToday = false;
+  bool _isCheckingIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubscription();
+    _loadTodayCheckinStatus();
+  }
+
+  String _todayDateString() {
+    final now = DateTime.now();
+    return "${now.year}-${now.month}-${now.day}";
+  }
+
+  /// يقرأ حالة تسجيل الحضور المحفوظة محلياً لتفادي طلب API إضافي عند فتح
+  /// الشاشة فقط لمعرفة "هل سجّلت اليوم؟" — يُحدَّث فوراً بعد أي تسجيل ناجح.
+  Future<void> _loadTodayCheckinStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastCheckin = prefs.getString('last_checkin_date');
+    if (mounted) {
+      setState(() => _isCheckedInToday = lastCheckin == _todayDateString());
+    }
+  }
+
+  Future<void> _handleCheckIn() async {
+    setState(() => _isCheckingIn = true);
+
+    final result = await _apiService.checkInAttendance();
+
+    if (!mounted) return;
+
+    if (result.isUnauthorized) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    setState(() => _isCheckingIn = false);
+
+    if (result.success) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_checkin_date', _todayDateString());
+
+      if (!mounted) return;
+      setState(() => _isCheckedInToday = true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? "تم تسجيل حضورك بنجاح", style: const TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? "تعذّر تسجيل حضورك، حاول مجدداً", style: const TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  /// 📡 جلب حالة الاشتراك من الـ API. عند انتهاء صلاحية الجلسة (401)
+  /// يُعاد توجيه اللاعب تلقائياً لشاشة تسجيل الدخول بدل مجرد عرض خطأ.
+  Future<void> _loadSubscription() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _apiService.getSubscription();
+
+    if (!mounted) return;
+
+    if (result.isUnauthorized) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = false;
+      if (result.success) {
+        _subscription = result.subscription;
+      } else {
+        _errorMessage = result.errorMessage;
+      }
+    });
+  }
+
   int _calculateDaysLeft() {
-    DateTime expiryDate = DateTime.parse(expiryDateString);
-    DateTime now = DateTime.now();
-    int difference = expiryDate.difference(now).inDays;
+    final difference = _subscription!.endDate.difference(DateTime.now()).inDays;
     return difference > 0 ? difference : 0;
   }
 
-// ✅ دالة تسجيل التمرين
+  int _calculateTotalDays() {
+    final total = _subscription!.endDate.difference(_subscription!.startDate).inDays;
+    return total > 0 ? total : 1; // تجنّب القسمة على صفر إن تطابق التاريخان
+  }
+
   void _markWorkoutDone() {
     if (_completedWorkouts < _totalWeeklyWorkouts) {
-      setState(() {
-        _completedWorkouts++;
-      });
+      setState(() => _completedWorkouts++);
 
-      ScaffoldMessenger.of(context).clearSnackBars(); // يقوم بمسح الإشعار القديم فورا
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text("عاش يا بطل! تم إنجاز تمرين اليوم بنجاح 🔥", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: const Text("تم تسجيل إنجاز تمرين اليوم بنجاح", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           backgroundColor: Colors.green.shade700,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -47,17 +164,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
-  // ✅ دالة التراجع عن إكمال التمرين
   void _undoWorkoutDone() {
     if (_completedWorkouts > 0) {
-      setState(() {
-        _completedWorkouts--;
-      });
+      setState(() => _completedWorkouts--);
 
-      ScaffoldMessenger.of(context).clearSnackBars(); // يقوم بمسح الإشعار القديم فورا
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text("تم التراجع عن تسجيل التمرين ⏪", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+          content: const Text("تم التراجع عن تسجيل التمرين", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
           backgroundColor: Colors.orange.shade800,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -69,39 +183,151 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final int daysLeft = _calculateDaysLeft();
-    final double progressValue = daysLeft / totalSubscriptionDays;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
-
       appBar: AppBar(
         title: const Text('حالة الاشتراك',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline, color: AppTheme.primaryColor),
+            tooltip: 'الملف الشخصي',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            },
+          ),
+        ],
       ),
+      body: _buildBody(),
+    );
+  }
 
-      body: SingleChildScrollView(
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+    }
+
+    if (_errorMessage != null) {
+      return _buildErrorState();
+    }
+
+    final int daysLeft = _calculateDaysLeft();
+    final double progressValue = daysLeft / _calculateTotalDays();
+
+    return RefreshIndicator(
+      color: AppTheme.primaryColor,
+      backgroundColor: AppTheme.cardColor,
+      onRefresh: _loadSubscription,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
         child: Column(
           children: [
             _buildDaysCounter(daysLeft, progressValue),
-            const SizedBox(height: 30),
+            const SizedBox(height: 16),
 
-            // صندوق الإنجاز الأسبوعي المحدث
+            _buildAttendanceCheckInBox(),
+            const SizedBox(height: 20),
+
             _buildWeeklyProgressBox(),
 
             const SizedBox(height: 15),
-            _buildFeatureTile(Icons.history_toggle_off, "تاريخ انتهاء الاشتراك", expiryDateString),
-            _buildFeatureTile(Icons.speed, "مستوى الالتزام العام", "${(progressValue * 100).toInt()}%"),
+            _buildFeatureTile(Icons.workspace_premium, "نوع الباقة", _subscription!.planName),
+            _buildFeatureTile(Icons.history_toggle_off, "تاريخ انتهاء الاشتراك", _formatDate(_subscription!.endDate)),
+            _buildFeatureTile(Icons.speed, "مستوى الالتزام العام", "${(progressValue * 100).clamp(0, 100).toInt()}%"),
             const SizedBox(height: 30),
             _buildSupportSection(),
             const SizedBox(height: 15),
             _buildRenewButton(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded, color: Colors.white38, size: 60),
+            const SizedBox(height: 20),
+            Text(
+              _errorMessage ?? "حدث خطأ غير متوقع",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 15),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadSubscription,
+              icon: const Icon(Icons.refresh, color: Colors.black),
+              label: const Text("إعادة المحاولة", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  }
+
+  /// 🖐️ كرت تسجيل الحضور اليومي بالصالة — مرة واحدة فقط في اليوم.
+  Widget _buildAttendanceCheckInBox() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _isCheckedInToday
+              ? Colors.greenAccent.withOpacity(0.4)
+              : AppTheme.primaryColor.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _isCheckedInToday ? Icons.check_circle_rounded : Icons.fingerprint,
+            color: _isCheckedInToday ? Colors.greenAccent : AppTheme.primaryColor,
+            size: 30,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              _isCheckedInToday ? "تم تسجيل حضورك اليوم" : "سجّل حضورك اليوم بالصالة",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+          if (!_isCheckedInToday)
+            SizedBox(
+              height: 40,
+              child: ElevatedButton(
+                onPressed: _isCheckingIn ? null : _handleCheckIn,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: _isCheckingIn
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                      )
+                    : const Text("تسجيل", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -127,7 +353,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("إنجاز الأسبوع 🔥", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("إنجاز الأسبوع", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
@@ -141,7 +367,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ),
           const SizedBox(height: 25),
 
-          // دوائر الأيام التفاعلية
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(_totalWeeklyWorkouts, (index) {
@@ -155,10 +380,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   color: isDone ? AppTheme.primaryColor : Colors.black45,
                   shape: BoxShape.circle,
                   border: Border.all(color: isDone ? AppTheme.primaryColor : Colors.white24, width: 2),
-                  // ✅ التعديل الجوهري لحل مشكلة الشاشة الحمراء
                   boxShadow: [
                     BoxShadow(
-                      // ننتقل من لون الفسفوري للون الشفاف بدلاً من حذف الظل بالكامل
                       color: isDone ? AppTheme.primaryColor.withOpacity(0.5) : Colors.transparent,
                       blurRadius: 10,
                       spreadRadius: 1,
@@ -176,7 +399,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
           const SizedBox(height: 25),
 
-          // ✅ زر الانتقال لتمارين اليوم
           SizedBox(
             width: double.infinity,
             height: 45,
@@ -198,7 +420,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
           const SizedBox(height: 12),
 
-          // ✅ صف يحتوي على زر "التسجيل" وزر "التراجع"
           Row(
             children: [
               Expanded(
@@ -211,7 +432,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         color: Colors.black
                     ),
                     label: Text(
-                      _completedWorkouts < _totalWeeklyWorkouts ? "تسجيل إنهاء التمرين" : "أكملت الهدف 🏆",
+                      _completedWorkouts < _totalWeeklyWorkouts ? "تسجيل إنهاء التمرين" : "أكملت الهدف",
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 14),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -224,8 +445,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                 ),
               ),
-
-              // ✅ ظهور زر التراجع فقط في حال وجود تمرين منجز
               if (_completedWorkouts > 0) ...[
                 const SizedBox(width: 10),
                 Container(
@@ -251,6 +470,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Widget _buildDaysCounter(int daysLeft, double progress) {
+    // ✅ الحالة المعروضة تعتمد على is_active القادم من الباك إند
+    // (نفس منطق hasActiveSubscription في الموقع)، وليس فقط على الأيام المتبقية.
+    final bool isActive = _subscription!.isActive;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40),
@@ -268,9 +491,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 width: 150,
                 height: 150,
                 child: CircularProgressIndicator(
-                  value: progress,
+                  value: progress.clamp(0.0, 1.0),
                   strokeWidth: 12,
-                  color: daysLeft <= 5 ? Colors.redAccent : AppTheme.primaryColor,
+                  color: !isActive || daysLeft <= 5 ? Colors.redAccent : AppTheme.primaryColor,
                   backgroundColor: Colors.black45,
                   strokeCap: StrokeCap.round,
                 ),
@@ -287,7 +510,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ],
           ),
           const SizedBox(height: 25),
-          Text(daysLeft > 0 ? "اشتراكك نشط الآن 🔥" : "انتهى الاشتراك ⚠️",
+          Text(isActive ? "اشتراكك نشط الآن" : "انتهى الاشتراك",
               style: const TextStyle(fontSize: 18, color: Colors.white70)),
         ],
       ),
@@ -316,7 +539,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Widget _buildSupportSection() {
     return InkWell(
-      onTap: () => _openWhatsApp("0947690761"),
+      onTap: () => _openWhatsApp("0947690761", "مرحباً كوتش، أحتاج للمساعدة في نظامي الرياضي"),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -328,7 +551,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         child: const Row(
           children: [
             Icon(Icons.chat_bubble_outline, color: Color(0xFF25D366)),
-            const SizedBox(width: 15),
+            SizedBox(width: 15),
             Text("طلب مساعدة من المدرب",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             Spacer(),
@@ -339,25 +562,30 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// ✅ زر التجديد: بما أن الدفع الإلكتروني غير مبني بعد، يفتح واتساب المدرب
+  /// مباشرة برسالة جاهزة تتضمّن اسم الباقة الحالية — حل مرحلي عملي إلى
+  /// حين بناء بوابة دفع فعلية.
   Widget _buildRenewButton() {
     return SizedBox(
       width: double.infinity,
       height: 55,
       child: OutlinedButton(
-        onPressed: () {},
+        onPressed: () => _openWhatsApp(
+          "0947690761",
+          "مرحباً كوتش، أريد تجديد اشتراكي (${_subscription!.planName})",
+        ),
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: AppTheme.primaryColor),
           backgroundColor: Colors.black12,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
-        child: const Text("تجديد الاشتراك المبكر",
+        child: const Text("تجديد الاشتراك عبر المدرب",
             style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Future<void> _openWhatsApp(String phoneNumber) async {
-    const String message = "مرحباً كوتش، أحتاج للمساعدة في نظامي الرياضي 🐯";
+  Future<void> _openWhatsApp(String phoneNumber, String message) async {
     final Uri whatsappUri = Uri.parse("whatsapp://send?phone=$phoneNumber&text=${Uri.encodeComponent(message)}");
     final Uri whatsappWebUri = Uri.parse("https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}");
     try {

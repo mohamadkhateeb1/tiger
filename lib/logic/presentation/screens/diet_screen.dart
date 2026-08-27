@@ -1,58 +1,129 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme.dart';
-import '../../../data/models/diet_model.dart';
-import '../../../data/models/mock_diet_data.dart';
+import '../../../data/models/meal_model.dart';
+import 'api_service.dart';
+import 'login_screen.dart';
 
-class DietScreen extends StatelessWidget {
+class DietScreen extends StatefulWidget {
   const DietScreen({Key? key}) : super(key: key);
 
   @override
+  State<DietScreen> createState() => _DietScreenState();
+}
+
+class _DietScreenState extends State<DietScreen> {
+  final ApiService _apiService = ApiService();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<MealModel> _meals = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDiet();
+  }
+
+  Future<void> _loadDiet() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _apiService.getDiet();
+
+    if (!mounted) return;
+
+    if (result.isUnauthorized) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = false;
+      if (result.success) {
+        _meals = result.meals ?? [];
+      } else {
+        _errorMessage = result.errorMessage;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final selectedDiets = MockDietData.allDiets.where((d) => d.isSelectedByCoach).toList();
-    final otherDiets = MockDietData.allDiets.where((d) => !d.isSelectedByCoach).toList();
-
     return Scaffold(
-      // ✅ تغيير هام: جعل الخلفية شفافة لتظهر صورة الخلفية من MainWrapper
       backgroundColor: Colors.transparent,
-
       appBar: AppBar(
         title: const Text('نظامك الغذائي',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
-        // ✅ جعل الـ AppBar شفافاً تماماً
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+    }
+
+    if (_errorMessage != null) {
+      return _buildErrorState();
+    }
+
+    if (_meals.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return RefreshIndicator(
+      color: AppTheme.primaryColor,
+      backgroundColor: AppTheme.cardColor,
+      onRefresh: _loadDiet,
+      child: GridView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: _meals.length,
+        itemBuilder: (context, index) => _buildMealCard(context, _meals[index]),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _buildSectionTitle("وجبات اليوم المقترحة 🔥"),
-
-            SizedBox(
-              height: 230,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(left: 16),
-                itemCount: selectedDiets.length,
-                itemBuilder: (context, index) => _buildSelectedDietCard(context, selectedDiets[index]),
-              ),
+            const Icon(Icons.wifi_off_rounded, color: Colors.white38, size: 60),
+            const SizedBox(height: 20),
+            Text(
+              _errorMessage ?? "حدث خطأ غير متوقع",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 15),
             ),
-
-            _buildSectionTitle("مكتبة الوجبات الصحية"),
-
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), // زيادة الحشو السفلي لعدم تداخل المحتوى مع الشريط السفلي
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: otherDiets.length,
-              itemBuilder: (context, index) => _buildGridDietCard(context, otherDiets[index]),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadDiet,
+              icon: const Icon(Icons.refresh, color: Colors.black),
+              label: const Text("إعادة المحاولة", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -60,68 +131,29 @@ class DietScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-      child: Text(title,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-    );
-  }
-
-  Widget _buildSelectedDietCard(BuildContext context, DietModel diet) {
-    return InkWell(
-      onTap: () => _showDietDescription(context, diet),
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 180,
-        margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          // ✅ استخدام لون البطاقة من الثيم مع شفافية بسيطة لتعطي تأثيراً زجاجياً
-          color: AppTheme.cardColor.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3), width: 1),
-        ),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: Image.network(
-                  diet.imageUrl,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                  },
-                  errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.fastfood, color: AppTheme.primaryColor, size: 40),
-                ),
-              ),
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.restaurant_menu, color: Colors.white24, size: 60),
+            SizedBox(height: 20),
+            Text(
+              "لا توجد لديك خطة غذائية بعد.\nتواصل مع مدربك لإسناد وجباتك.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 15),
             ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                children: [
-                  Text(diet.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                      textAlign: TextAlign.center,
-                      maxLines: 1),
-                  const SizedBox(height: 5),
-                  Text("${diet.calories} سعرة",
-                      style: const TextStyle(color: AppTheme.primaryColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            )
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGridDietCard(BuildContext context, DietModel diet) {
+  Widget _buildMealCard(BuildContext context, MealModel meal) {
     return InkWell(
-      onTap: () => _showDietDescription(context, diet),
+      onTap: () => _showMealDetails(context, meal),
       borderRadius: BorderRadius.circular(15),
       child: Container(
         decoration: BoxDecoration(
@@ -135,13 +167,15 @@ class DietScreen extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                child: Image.network(
-                  diet.imageUrl,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  errorBuilder: (context, error, stackTrace) =>
-                  const Center(child: Icon(Icons.fastfood, color: Colors.white24)),
-                ),
+                child: meal.imageUrl != null && meal.imageUrl!.isNotEmpty
+                    ? Image.network(
+                        meal.imageUrl!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(child: Icon(Icons.fastfood, color: Colors.white24)),
+                      )
+                    : const Center(child: Icon(Icons.fastfood, color: Colors.white24)),
               ),
             ),
             Padding(
@@ -149,12 +183,12 @@ class DietScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(diet.name,
+                  Text(meal.mealName,
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
-                  Text("${diet.calories} سعرة",
+                  Text("${meal.calories} سعرة",
                       style: const TextStyle(color: AppTheme.primaryColor, fontSize: 12)),
                 ],
               ),
@@ -165,8 +199,7 @@ class DietScreen extends StatelessWidget {
     );
   }
 
-  // دالة الـ BottomSheet تبقى كما هي لأنها تغطي الشاشة بشكل متعمد عند عرض التفاصيل
-  void _showDietDescription(BuildContext context, DietModel diet) {
+  void _showMealDetails(BuildContext context, MealModel meal) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -193,7 +226,7 @@ class DietScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(diet.name,
+                  child: Text(meal.mealName,
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
                 Container(
@@ -202,27 +235,34 @@ class DietScreen extends StatelessWidget {
                     color: AppTheme.primaryColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text("${diet.calories} سعرة",
+                  child: Text("${meal.calories} سعرة",
                       style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMacroInfo("بروتين", diet.protein),
-                _buildMacroInfo("كارب", diet.carbs),
-                _buildMacroInfo("دهون", diet.fats),
-              ],
-            ),
+
+            // 🍗 الماكروز تُعرض فقط إذا أدخلها المدرب من الموقع
+            if (meal.hasMacros)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMacroInfo("بروتين", meal.protein),
+                  _buildMacroInfo("كارب", meal.carbs),
+                  _buildMacroInfo("دهون", meal.fats),
+                ],
+              )
+            else
+              const Text("لم يحدّد المدرب تفاصيل الماكروز لهذه الوجبة بعد.",
+                  style: TextStyle(color: Colors.white38, fontSize: 13)),
+
             const SizedBox(height: 15),
             const Divider(color: Colors.white10),
             const SizedBox(height: 15),
-            const Text("لماذا هذه الوجبة؟",
+            const Text("المكونات والتفاصيل",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
             const SizedBox(height: 10),
-            Text(diet.description,
+            Text(meal.planDetails,
                 style: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.9), height: 1.6)),
             const SizedBox(height: 40),
             SizedBox(
@@ -243,10 +283,11 @@ class DietScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMacroInfo(String label, String value) {
+  Widget _buildMacroInfo(String label, double? value) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(value != null ? "${value.toStringAsFixed(0)}غ" : "—",
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
       ],
     );
