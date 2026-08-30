@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart'; // ✅ إضافة مكتبة url_launcher
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme.dart';
 import 'api_service.dart';
 import 'main_wrapper.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -25,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // --- دالة فتح الواتساب للتسجيل ---
   Future<void> _openWhatsAppRegistration() async {
     const String phoneNumber = "905347321137"; // رقم التواصل الخاص بالمدرب
-    const String message = "مرحباً كوتش، أريد التسجيل والاشتراك في النادي 🐯";
+    const String message = "مرحباً كوتش، أريد التسجيل والاشتراك في النادي";
     final Uri whatsappUri = Uri.parse("whatsapp://send?phone=$phoneNumber&text=${Uri.encodeComponent(message)}");
     final Uri whatsappWebUri = Uri.parse("https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}");
 
@@ -91,12 +91,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ويدجت لعرض رسائل الخطأ
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: AppTheme.dangerColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -107,103 +106,136 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 100),
-              const Center(
-                child: Icon(Icons.fitness_center, size: 80, color: AppTheme.primaryColor),
-              ),
-              const SizedBox(height: 30),
-              const Text(
-                "تسجيل الدخول",
-                style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "أدخل بياناتك للمتابعة في تدريبك 🐯",
-                style: TextStyle(color: Colors.grey, fontSize: 16),
-              ),
-              const SizedBox(height: 40),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 70),
 
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                enabled: !_isLoading,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'البريد الإلكتروني',
-                  prefixIcon: Icon(Icons.email_outlined, color: AppTheme.primaryColor),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: !_isPasswordVisible,
-                enabled: !_isLoading,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'كلمة المرور',
-                  prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryColor),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                      color: Colors.grey,
+                // ===== شعار Elite Club — نفس روح شعار الموقع =====
+                Center(
+                  child: Container(
+                    width: 78,
+                    height: 78,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AppTheme.goldLight, AppTheme.primaryColor, AppTheme.goldDark],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryColor.withOpacity(0.35),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
-                    onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                    child: const Icon(Icons.fitness_center_rounded, size: 38, color: Color(0xFF1A1305)),
                   ),
                 ),
-              ),
-              const SizedBox(height: 30),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleLogin,
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black),
-                        )
-                      : const Text("دخول الآن", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 18),
+                const Text(
+                  "ELITE CLUB",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.textColor, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2),
                 ),
-              ),
+                const SizedBox(height: 4),
+                const Text(
+                  "Gym Management",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.mutedColor, fontSize: 12, letterSpacing: 1),
+                ),
 
-              const SizedBox(height: 15),
+                const SizedBox(height: 44),
 
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : _handleGuestLogin,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppTheme.primaryColor, width: 1.5),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                const Text(
+                  "تسجيل الدخول",
+                  style: TextStyle(color: AppTheme.textColor, fontSize: 26, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "أدخل بياناتك للمتابعة في برنامجك التدريبي",
+                  style: TextStyle(color: AppTheme.mutedColor, fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  enabled: !_isLoading,
+                  decoration: const InputDecoration(
+                    labelText: 'البريد الإلكتروني',
+                    prefixIcon: Icon(Icons.email_outlined, color: AppTheme.primaryColor),
                   ),
-                  child: const Text("الدخول كضيف 👁️", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
                 ),
-              ),
+                const SizedBox(height: 18),
 
-              const SizedBox(height: 20),
-              Center(
-                child: Wrap(
-                  children: [
-                    const Text("ليس لديك حساب؟ ", style: TextStyle(color: Colors.white)),
-                    GestureDetector(
-                      onTap: _openWhatsAppRegistration,
-                      child: const Text("اتصل بالمدرب للتسجيل", style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: !_isPasswordVisible,
+                  enabled: !_isLoading,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور',
+                    prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryColor),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        color: AppTheme.mutedColor,
+                      ),
+                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 30), // مساحة إضافية في الأسفل
-            ],
+                const SizedBox(height: 28),
+
+                SizedBox(
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleLogin,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF1A1305)),
+                          )
+                        : const Text("دخول الآن", style: TextStyle(fontSize: 17)),
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                SizedBox(
+                  height: 55,
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _handleGuestLogin,
+                    child: const Text("الدخول كضيف", style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+                Center(
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      const Text("ليس لديك حساب؟ ", style: TextStyle(color: AppTheme.textSoftColor)),
+                      GestureDetector(
+                        onTap: _openWhatsAppRegistration,
+                        child: const Text(
+                          "اتصل بالمدرب للتسجيل",
+                          style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),
