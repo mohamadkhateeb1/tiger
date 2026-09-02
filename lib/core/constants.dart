@@ -7,5 +7,5 @@ class Constants {
   /// - جهاز حقيقي على نفس شبكة الواي فاي: استخدم عنوان IP جهاز الكمبيوتر الفعلي
   ///   (يظهر عبر أمر `ipconfig` بويندوز، تحت "IPv4 Address")
   /// - بعد النشر على سيرفر حقيقي: استبدل بالدومين الفعلي (https://...)
-  static const String apiBaseUrl = 'http://127.0.0.1:8000/api';
+static const String apiBaseUrl = 'http://192.168.0.9:8000/api';
 }

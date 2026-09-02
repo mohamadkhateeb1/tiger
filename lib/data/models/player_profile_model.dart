@@ -25,6 +25,16 @@ class PlayerProfileModel {
     required this.joinedAt,
   });
 
+  /// 🛡️ تحويل آمن لأي قيمة رقمية قادمة من الـ API، بغضّ النظر عن نوعها
+  /// الفعلي بالـ JSON (رقم صريح أو نص) — يحمي من انهيار التطبيق لو رجع
+  /// الخادم رقماً كنص بالغلط (مثل حقول decimal بلا cast صريح بلارافيل).
+  static double? _parseNum(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
   factory PlayerProfileModel.fromJson(Map<String, dynamic> json) {
     return PlayerProfileModel(
       id: json['id'] as int,
@@ -32,8 +42,8 @@ class PlayerProfileModel {
       email: json['email'] as String,
       phone: json['phone'] as String?,
       level: json['level'] as String?,
-      height: (json['height'] as num?)?.toDouble(),
-      weight: (json['weight'] as num?)?.toDouble(),
+      height: _parseNum(json['height']),
+      weight: _parseNum(json['weight']),
       dateOfBirth: json['date_of_birth'] as String?,
       coachName: json['coach_name'] as String?,
       joinedAt: json['joined_at'] as String,

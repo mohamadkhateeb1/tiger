@@ -21,14 +21,32 @@ class MealModel {
     this.imageUrl,
   });
 
+  /// 🛡️ تحويل آمن لأي قيمة رقمية قادمة من الـ API، بغضّ النظر عن نوعها
+  /// الفعلي بالـ JSON (رقم صريح أو نص) — يحمي من انهيار التطبيق لو
+  /// رجع الخادم رقماً كنص بالغلط (مثل حقول decimal بلا cast صريح بلارافيل).
+  static double? _parseNum(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int _parseInt(dynamic value, {int fallback = 0}) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? (double.tryParse(value)?.toInt() ?? fallback);
+    return fallback;
+  }
+
   factory MealModel.fromJson(Map<String, dynamic> json) {
     return MealModel(
-      id: json['id'] as int,
+      id: _parseInt(json['id']),
       mealName: json['meal_name'] as String? ?? '',
-      calories: json['calories'] as int? ?? 0,
-      protein: (json['protein'] as num?)?.toDouble(),
-      carbs: (json['carbs'] as num?)?.toDouble(),
-      fats: (json['fats'] as num?)?.toDouble(),
+      calories: _parseInt(json['calories']),
+      protein: _parseNum(json['protein']),
+      carbs: _parseNum(json['carbs']),
+      fats: _parseNum(json['fats']),
       planDetails: json['plan_details'] as String? ?? '',
       // 📸 يصل رابطاً كاملاً جاهزاً من الـ API (وليس مساراً نسبياً)،
       // حتى لا يحتاج التطبيق لمعرفة دومين التخزين أو بنائه بنفسه.

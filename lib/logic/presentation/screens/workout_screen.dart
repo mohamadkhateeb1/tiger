@@ -274,7 +274,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   Widget _buildExerciseMedia(ExerciseModel exercise, {required double iconSize}) {
     if (exercise.videoUrl != null && exercise.videoUrl!.isNotEmpty) {
-      return WorkoutVideoPlayer(videoUrl: exercise.videoUrl!);
+      // 🆕 نمرّر رابط الصورة كبديل احتياطي دايماً — لو الفيديو فشل (رابط
+      // يوتيوب أو ملف تالف)، بتظهر الصورة تلقائياً بدل أيقونة عطل فارغة.
+      return WorkoutVideoPlayer(
+        videoUrl: exercise.videoUrl!,
+        fallbackImageUrl: exercise.imageUrl,
+      );
     }
 
     if (exercise.imageUrl != null && exercise.imageUrl!.isNotEmpty) {
